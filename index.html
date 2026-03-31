@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LabApp - Manager Pro</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        /* =========================================
+           1. ZÁKLADNÍ STYLY A PROMĚNNÉ (CSS)
+           ========================================= */
+        :root {
+            --bg-color: #0b0b0b;
+            --surface-color: #1a1a1a;
+            --surface-light: #262626;
+            --primary-color: #00d2ff;
+            --primary-dark: #3a7bd5;
+            --accent-color: #00e676;
+            --text-main: #ffffff;
+            --text-muted: #888888;
+            --danger: #ff4c4c;
+            --nav-height: 75px;
+            --manager-gold: #ffd700;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: #000;
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Hlavní kontejner aplikace */
+        #app {
+            width: 100%;
+            max-width: 450px;
+            min-height: 100vh;
+            background-color: var(--bg-color);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 50px rgba(0,0,0,0.9);
+        }
+
+        .view {
+            display: none;
+            padding: 25px;
+            padding-bottom: calc(var(--nav-height) + 40px);
+            flex: 1;
+            overflow-y: auto;
+            animation: fadeInView 0.4s ease-out;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        @keyframes fadeInView {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 { font-size: 2.4em; font-weight: 800; letter-spacing: -1px; margin-bottom: 10px; }
+        h2 { font-size: 1.6em; margin-bottom: 20px; font-weight: 600; }
+        h3 { font-size: 0.9em; margin-bottom: 15px; color: var(--primary-color); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800; }
+
+        /* Status Badge */
+        .manager-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: linear-gradient(135deg, #ffd700, #ff8c00);
+            color: black;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.65em;
+            font-weight: 900;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        /* Formulářové prvky */
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; font-size: 0.75em; color: var(--text-muted); margin-bottom: 8px; margin-left: 5px; text-transform: uppercase; font-weight: bold; }
+        .input-control { width: 100%; padding: 16px; background-color: var(--surface-light); border: 1px solid #333; color: white; border-radius: 14px; font-size: 1em; outline: none; transition: all 0.3s ease; }
+        .input-control:focus { border-color: var(--primary-color); background-color: #2d2d2d; box-shadow: 0 0 10px rgba(0, 210, 255, 0.2); }
+
+        .btn-action { width: 100%; padding: 18px; border: none; border-radius: 14px; font-weight: bold; font-size: 1em; cursor: pointer; transition: transform 0.2s, filter 0.2s; margin-bottom: 12px; display: flex; justify-content: center; align-items: center; gap: 12px; }
+        .btn-action:active { transform: scale(0.98); }
+        .btn-main { background: linear-gradient(135deg, var(--primary-dark), var(--primary-color)); color: white; box-shadow: 0 4px 15px rgba(58, 123, 213, 0.4); }
+        .btn-ghost { background-color: var(--surface-light); color: var(--text-main); border: 1px solid #333; }
+        .btn-lock { background-color: #2a2a2a; color: #555; cursor: not-allowed; }
+        .btn-remove { background-color: rgba(255, 76, 76, 0.15); color: var(--danger); width: auto; padding: 10px 15px; font-size: 0.9em; }
+
+        /* Karty */
+        .dashboard-card { background: var(--surface-color); padding: 25px; border-radius: 24px; margin-bottom: 20px; border: 1px solid #2a2a2a; position: relative; overflow: hidden; }
+        .money-display { font-size: 2.8em; font-weight: 800; color: var(--accent-color); font-family: 'monospace'; margin: 10px 0; text-shadow: 0 0 20px rgba(0, 230, 118, 0.2); }
+        .lock-indicator { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(255, 76, 76, 0.1); color: var(--danger); border-radius: 30px; font-size: 0.75em; font-weight: bold; margin-top: 10px; }
+
+        /* Dokument NDA */
+        .document-paper { background-color: #181818; padding: 25px; border-radius: 12px; border-left: 5px solid var(--primary-color); line-height: 1.7; color: #ccc; font-size: 0.92em; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .doc-h { color: var(--primary-color); font-weight: bold; margin-top: 20px; display: block; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; }
+
+        /* Produkty */
+        .product-box { background: var(--surface-color); border-radius: 20px; overflow: hidden; margin-bottom: 25px; border: 1px solid #222; }
+        .img-container { width: 100%; height: 200px; background-color: #333; overflow: hidden; }
+        .img-container img { width: 100%; height: 100%; object-fit: cover; }
+        .product-body { padding: 20px; }
+        .price-tag { font-size: 1.4em; color: var(--accent-color); font-weight: 800; margin-bottom: 15px; }
+
+        /* Košík */
+        .cart-item-row { display: flex; justify-content: space-between; align-items: center; padding: 18px; background: var(--surface-light); border-radius: 16px; margin-bottom: 12px; border: 1px solid #333; }
+
+        /* Chat */
+        .chat-container { display: flex; flex-direction: column; height: 400px; background: #0f0f0f; border-radius: 20px; padding: 20px; margin-bottom: 20px; border: 1px solid #222; }
+        .messages-flow { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .bubble { padding: 12px 16px; border-radius: 18px; font-size: 0.9em; max-width: 85%; }
+        .bubble-bot { background: var(--surface-light); color: #ddd; align-self: flex-start; border-bottom-left-radius: 4px; }
+        .bubble-user { background: var(--primary-dark); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+
+        /* Navigace */
+        #main-navigation { position: fixed; bottom: 0; width: 100%; max-width: 450px; height: var(--nav-height); background: rgba(20, 20, 20, 0.92); backdrop-filter: blur(20px); display: none; justify-content: space-around; align-items: center; border-top: 1px solid #222; z-index: 9999; }
+        .nav-btn { flex: 1; text-align: center; color: var(--text-muted); font-size: 0.7em; font-weight: bold; cursor: pointer; position: relative; padding: 10px 0; }
+        .nav-btn i { display: block; font-size: 1.6em; margin-bottom: 6px; }
+        .nav-btn.active { color: var(--primary-color); }
+        .cart-badge-count { position: absolute; top: 2px; right: 22%; background: var(--danger); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 0.7em; display: flex; justify-content: center; align-items: center; display: none; }
+
+        /* Modaly */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 10000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        .modal-content { background: var(--surface-color); width: 90%; max-width: 400px; padding: 25px; border-radius: 20px; border: 1px solid var(--primary-color); max-height: 90vh; overflow-y: auto; }
+        .btn-disabled { background: #333 !important; color: #777 !important; cursor: not-allowed !important; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    
+    <div id="view-auth" class="view active">
+        <div style="text-align: center; margin: 70px 0 40px 0;">
+            <div style="width: 90px; height: 90px; background: linear-gradient(135deg, #3a7bd5, #00d2ff); border-radius: 25px; display: flex; justify-content: center; align-items: center; margin: 0 auto 25px auto; box-shadow: 0 10px 25px rgba(0,210,255,0.3);">
+                <i class="fa-solid fa-microscope" style="font-size: 3em; color: white;"></i>
+            </div>
+            <h1>MANAGER SYS</h1>
+            <p style="color: var(--text-muted); font-weight: 500; letter-spacing: 2px;">LABORATORY B.V. INTERNAL</p>
+        </div>
+
+        <div id="auth-msg-box" style="display: none; padding: 15px; border-radius: 12px; background: rgba(255,76,76,0.1); color: var(--danger); font-size: 0.9em; margin-bottom: 20px; text-align: center; border: 1px solid var(--danger);"></div>
+
+        <div class="form-group">
+            <span class="form-label">Manažerské ID (Telefon)</span>
+            <input type="tel" id="auth-phone" class="input-control" placeholder="+420 000 000 000">
+        </div>
+        
+        <div class="form-group">
+            <span class="form-label">Přístupový klíč</span>
+            <input type="password" id="auth-pass" class="input-control" placeholder="••••••••">
+        </div>
+
+        <button class="btn-action btn-main" onclick="executeLogin()">
+            <i class="fa-solid fa-shield-check"></i> AUTORIZOVAT PŘÍSTUP
+        </button>
+        
+        <button class="btn-action btn-ghost" onclick="executeRegister()">
+            AKTIVOVAT MANAŽERSKÝ ÚČET
+        </button>
+        
+        <p style="text-align: center; font-size: 0.72em; color: #444; margin-top: 50px; line-height: 1.5; padding: 0 20px;">
+            Přihlášením potvrzujete, že spravujete laboratorní investiční portfolio v souladu s NDA Laboratory B.V. Nizozemsko.
+        </p>
+    </div>
+
+    <div id="view-dashboard" class="view">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+                <div class="manager-badge"><i class="fa-solid fa-crown"></i> Manager Level</div>
+                <h2 style="margin-bottom: 0;">Systémový přehled</h2>
+            </div>
+            <div onclick="executeLogout()" style="width: 45px; height: 45px; background: var(--surface-light); border-radius: 12px; display: flex; justify-content: center; align-items: center; color: var(--danger); cursor: pointer;">
+                <i class="fa-solid fa-power-off"></i>
+            </div>
+        </div>
+
+        <div class="dashboard-card" style="border: 1px solid rgba(0, 210, 255, 0.3); background: linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%);">
+            <p style="color: var(--text-muted); font-size: 0.75em; font-weight: bold; letter-spacing: 1px;">KAPITÁLOVÉ ZHODNOCENÍ (CELKEM)</p>
+            <div class="money-display"><span id="realtime-cash">0.00</span> Kč</div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <div style="flex: 1; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 12px;">
+                    <p style="font-size: 0.6em; color: var(--text-muted);">DENNÍ ZISK</p>
+                    <p style="color: var(--accent-color); font-weight: bold; font-size: 0.9em;">+ <span id="daily-gain-val">2 500</span> Kč</p>
+                </div>
+                <div style="flex: 1; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 12px;">
+                    <p style="font-size: 0.6em; color: var(--text-muted);">STATUS PORTFOLIA</p>
+                    <p style="color: var(--primary-color); font-weight: bold; font-size: 0.9em;">AKTIVNÍ</p>
+                </div>
+            </div>
+
+            <button class="btn-action btn-lock" style="margin-top: 20px; background: #222;" onclick="triggerLockAlert()">
+                <i class="fa-solid fa-vault"></i> INKASOVAT KAPITÁL
+            </button>
+            
+            <div class="lock-indicator">
+                <i class="fa-solid fa-calendar-lock"></i> INVESTIČNÍ CYKLUS: <span id="days-countdown">1095</span> DNÍ
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
+            <div class="dashboard-card" style="padding: 20px; margin-bottom: 0;">
+                <p style="font-size: 0.7em; color: var(--text-muted); font-weight: bold;">MANAŽERSKÝ PODÍL</p>
+                <div style="font-size: 1.6em; font-weight: 800; color: var(--primary-color); margin-top: 5px;" id="stat-share">35 %</div>
+            </div>
+            <div class="dashboard-card" style="padding: 20px; margin-bottom: 0;">
+                <p style="font-size: 0.7em; color: var(--text-muted); font-weight: bold;">AKTIVNÍ DNY</p>
+                <div style="font-size: 1.6em; font-weight: 800; color: white; margin-top: 5px;" id="stat-active-days">0</div>
+            </div>
+        </div>
+
+        <h3>Tržní hodnota indexu (€)</h3>
+        <canvas id="chart-market"></canvas>
+
+        <h3 style="margin-top: 30px;">Vývoj správy portfolia</h3>
+        <canvas id="chart-user-growth"></canvas>
+    </div>
+
+    <div id="view-nda" class="view">
+        <h2 style="display: flex; align-items: center; gap: 12px;">
+            <i class="fa-solid fa-file-contract" style="color: var(--primary-color);"></i> Investiční Smlouva
+        </h2>
+        
+        <div class="document-paper">
+            <p style="text-align: center; font-weight: 900; color: white; letter-spacing: 1px; margin-bottom: 5px;">STRATEGICKÝ KONTRAKT</p>
+            <p style="font-size: 0.75em; text-align: center; margin-bottom: 20px; color: var(--text-muted);">Smluvní strana: Laboratory B.V., Netherlands</p>
+            
+            <span class="doc-h">ČLÁNEK I. - MANAŽERSKÉ TAJEMSTVÍ</span>
+            Manager se zavazuje k naprosté mlčenlivosti ohledně laboratorních postupů a interních dat. Systém podléhá vojenskému šifrování.
+            
+            <span class="doc-h">ČLÁNEK II. - KAPITÁLOVÉ PODMÍNKY</span>
+            Zisky jsou generovány na základě manažerského podílu. Vzhledem k vysokému zhodnocení jsou tyto prostředky splatné až po ukončení 3letého cyklu.
+            
+            <span class="doc-h">ČLÁNEK III. - DOBA TRVÁNÍ</span>
+            Blokace prostředků je sjednána na <strong>1095 dní</strong> pro zajištění stability laboratorního fondu.
+
+            <span class="doc-h">ČLÁNEK IV. - KAPITÁLOVÝ VKLAD</span>
+            Tento dokument potvrzuje přijetí manažerského vkladu ve výši <strong>340 EUR</strong>. Tento vklad slouží jako garance správy portfolia.
+            
+            <div style="margin-top: 40px; border-top: 1px solid #333; padding-top: 20px; font-size: 0.8em; font-style: italic;">
+                Digitální podpis ověřen dne: <span id="nda-sign-date" style="color: white; font-weight: bold;">--.--.----</span><br>
+                Status kontraktu: <span style="color: var(--accent-color); font-weight: bold;">AKTIVNÍ / MANAGER LEVEL</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-shop" class="view">
+        <h2>Laboratorní Katalog</h2>
+        <div id="shop-items-grid"></div>
+    </div>
+
+    <div id="view-cart" class="view">
+        <h2>Manažerský Košík</h2>
+        <p style="color: var(--primary-color); margin-bottom: 20px; font-size: 0.9em; font-weight: bold;">Minimální logistická hodnota: 205 €</p>
+        <div id="cart-items-list"></div>
+        <div id="cart-address-container" style="display: none; margin-top: 20px;"></div>
+        <div id="cart-checkout-area" style="display: none; margin-top: 40px;">
+            <div style="display: flex; justify-content: space-between; font-size: 1.4em; font-weight: 800; margin-bottom: 25px;">
+                <span>CELKEM:</span>
+                <span style="color: var(--accent-color);"><span id="cart-final-sum">0</span> Kč</span>
+            </div>
+            <button class="btn-action btn-main" onclick="processOrderCheckout()">ODESLAT K EXPEDICI</button>
+        </div>
+    </div>
+
+    <div id="view-orders" class="view">
+        <h2><i class="fa-solid fa-box-open"></i> Historie Expedic</h2>
+        <div id="orders-list-container"></div>
+    </div>
+
+    <div id="view-support" class="view">
+        <h2>Manager Support</h2>
+        <div class="chat-container">
+            <div class="messages-flow" id="support-chat-box">
+                <div class="bubble bubble-bot">Vítejte v zabezpečené lince Laboratory B.V. Vaše dotazy ohledně portfolia budou zodpovězeny prioritně.</div>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="support-msg-input" class="input-control" placeholder="Zadejte dotaz...">
+            <button class="btn-action btn-main" style="width: 65px;" onclick="sendSupportMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+    </div>
+
+    <div id="main-navigation">
+        <div class="nav-btn active" onclick="changeTab('dashboard')"><i class="fa-solid fa-chart-pie"></i>Portfolio</div>
+        <div class="nav-btn" onclick="changeTab('nda')"><i class="fa-solid fa-file-invoice-dollar"></i>Smlouva</div>
+        <div class="nav-btn" onclick="changeTab('shop')"><i class="fa-solid fa-flask-vial"></i>E-shop</div>
+        <div class="nav-btn" onclick="changeTab('cart')"><i class="fa-solid fa-cart-flatbed-suite"></i>Košík<span class="cart-badge-count" id="ui-cart-badge">0</span></div>
+        <div class="nav-btn" onclick="changeTab('orders')"><i class="fa-solid fa-truck-ramp-box"></i>Zásilky</div>
+        <div class="nav-btn" onclick="changeTab('support')"><i class="fa-solid fa-headset"></i>Podpora</div>
+    </div>
+
+    <div id="address-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2><i class="fa-solid fa-location-dot"></i> Logistická Adresa</h2>
+            <p style="text-align: center; color: var(--text-muted); font-size: 0.8em; margin-bottom: 20px;">Adresa pro doručení laboratorních vzorků.</p>
+            <input type="hidden" id="addr-phone">
+            <div class="form-group"><span class="form-label">Jméno a příjmení</span><input type="text" id="addr-name" class="input-control"></div>
+            <div class="form-group"><span class="form-label">Ulice a č.p.</span><input type="text" id="addr-street" class="input-control"></div>
+            <div style="display: flex; gap: 10px;">
+                <div style="flex: 2;"><span class="form-label">Město</span><input type="text" id="addr-city" class="input-control"></div>
+                <div style="flex: 1;"><span class="form-label">PSČ</span><input type="text" id="addr-zip" class="input-control"></div>
+            </div>
+            <button id="btn-save-address" class="btn-action btn-main btn-disabled" style="margin-top: 20px;" onclick="saveUserAddress()" disabled>ULOŽIT A UZAMKNOUT</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // --- STAV A DATA ---
+    let activeUser = null;
+    let userCart = [];
+    let userOrderHistory = [];
+    let statsUpdateInterval = null;
+    const CONTRACT_DURATION = 1095;
+
+    let inventory = [
+        { id: 1, name: "THC 15% Full-Spectrum Ice Cherry🍒 1G", price: 28, image: "https://images.unsplash.com/photo-1770192234700-762ddefa59a9?q=80&w=600" },
+        { id: 2, name: "THC 15% Full-Spectrum Orange🍊 1G", price: 28, image: "https://images.unsplash.com/photo-1774288904168-9a593abb0ff8?q=80&w=600" },
+        { id: 3, name: "Organický extrakt THC 18% 100ml", price: 2450, image: "https://images.unsplash.com/photo-1493101382455-cf11ffa65f45?q=80&w=600" },
+        { id: 4, name: "CUSTOM THC PŘES MANAGERA (CENA ZA GRAM)", price: 33, image: "https://images.unsplash.com/photo-1576086213369-97a306d36557?w=600" }
+    ];
+
+    /* --- LOGIKA VÝDĚLKU (UPGRADED) --- */
+    function refreshFinancials() {
+        if (!activeUser) return;
+
+        const now = Date.now();
+        const elapsedMs = now - activeUser.registeredAt;
+        const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
+        
+        // Logika pro Manager Level
+        const baseCapital = 5000;
+        const dailyGrowth = 2500;
+        
+        // Multiplikátory
+        let multiplier = 1.0;
+        if (elapsedDays >= 90) multiplier = 2.2;
+        else if (elapsedDays >= 30) multiplier = 1.5;
+        else if (elapsedDays >= 7) multiplier = 1.2;
+
+        const currentTotal = baseCapital + (elapsedDays * dailyGrowth * multiplier);
+        
+        // Zobrazení peněz
+        document.getElementById('realtime-cash').textContent = currentTotal.toLocaleString('cs-CZ', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+
+        // Dynamický podíl
+        let share = 35 + (elapsedDays * 0.33); 
+        if (share > 65) share = 65;
+        document.getElementById('stat-share').textContent = Math.floor(share) + " %";
+
+        // Info boxy
+        document.getElementById('daily-gain-val').textContent = (dailyGrowth * multiplier).toLocaleString('cs-CZ');
+        document.getElementById('stat-active-days').textContent = Math.floor(elapsedDays);
+        
+        const remaining = CONTRACT_DURATION - Math.floor(elapsedDays);
+        document.getElementById('days-countdown').textContent = remaining > 0 ? remaining : 0;
+    }
+
+    /* --- AUTH FUNKCE --- */
+    function executeRegister() {
+        const phone = document.getElementById('auth-phone').value.trim();
+        const pass = document.getElementById('auth-pass').value.trim();
+        if (phone.length < 9 || pass.length < 4) return displayAuthError("Neplatné údaje.");
+        
+        let db = JSON.parse(localStorage.getItem('lab_system_users') || '{}');
+        if (db[phone]) return displayAuthError("Uživatel již existuje.");
+
+        db[phone] = { password: pass, registeredAt: Date.now() };
+        localStorage.setItem('lab_system_users', JSON.stringify(db));
+        openAddressModal(phone);
+    }
+
+    function executeLogin() {
+        const phone = document.getElementById('auth-phone').value.trim();
+        const pass = document.getElementById('auth-pass').value.trim();
+        let db = JSON.parse(localStorage.getItem('lab_system_users') || '{}');
+        
+        if (db[phone] && db[phone].password === pass) {
+            activeUser = { phone: phone, registeredAt: db[phone].registeredAt };
+            localStorage.setItem('lab_active_session', JSON.stringify(activeUser));
+            bootApp();
+        } else {
+            displayAuthError("Chybné přihlašovací údaje.");
+        }
+    }
+
+    function bootApp() {
+        document.getElementById('view-auth').classList.remove('active');
+        document.getElementById('view-dashboard').classList.add('active');
+        document.getElementById('main-navigation').style.display = 'flex';
+        document.getElementById('nda-sign-date').textContent = new Date(activeUser.registeredAt).toLocaleDateString('cs-CZ');
+
+        renderShopProducts();
+        setupCharts();
+        
+        // Načtení objednávek
+        const savedHistory = localStorage.getItem('lab_user_orders_' + activeUser.phone);
+        userOrderHistory = savedHistory ? JSON.parse(savedHistory) : [];
+        renderOrderHistory();
+
+        refreshFinancials();
+        statsUpdateInterval = setInterval(refreshFinancials, 1000);
+    }
+
+    function displayAuthError(msg) {
+        const box = document.getElementById('auth-msg-box');
+        box.textContent = msg; box.style.display = 'block';
+        setTimeout(() => box.style.display = 'none', 4000);
+    }
+
+    /* --- E-SHOP & KOŠÍK --- */
+    function renderShopProducts() {
+        const grid = document.getElementById('shop-items-grid');
+        grid.innerHTML = "";
+        inventory.forEach(p => {
+            const el = document.createElement('div');
+            el.className = "product-box";
+            el.innerHTML = `
+                <div class="img-container"><img src="${p.image}"></div>
+                <div class="product-body">
+                    <strong>${p.name}</strong><br>
+                    <div class="price-tag">${p.price} Kč</div>
+                    <button class="btn-action btn-main" onclick="addItemToCart(${p.id})">PŘIDAT DO EXPEDICE</button>
+                </div>`;
+            grid.appendChild(el);
+        });
+    }
+
+    function addItemToCart(id) {
+        const item = inventory.find(i => i.id === id);
+        userCart.push(item);
+        const badge = document.getElementById('ui-cart-badge');
+        badge.style.display = 'flex'; badge.textContent = userCart.length;
+    }
+
+    function renderCartItems() {
+        const list = document.getElementById('cart-items-list');
+        list.innerHTML = "";
+        if (userCart.length === 0) {
+            list.innerHTML = `<p style="text-align:center; padding:40px; color:#444;">Váš manažerský košík je prázdný.</p>`;
+            document.getElementById('cart-checkout-area').style.display = 'none';
+            return;
+        }
+
+        let total = 0;
+        userCart.forEach((item, index) => {
+            total += item.price;
+            const row = document.createElement('div');
+            row.className = "cart-item-row";
+            row.innerHTML = `<div><strong>${item.name}</strong></div><button class="btn-action btn-remove" onclick="deleteItemFromCart(${index})"><i class="fa-solid fa-trash"></i></button>`;
+            list.appendChild(row);
+        });
+
+        document.getElementById('cart-final-sum').textContent = total.toLocaleString('cs-CZ');
+        document.getElementById('cart-checkout-area').style.display = 'block';
+        renderAddressInCart();
+    }
+
+    function deleteItemFromCart(idx) { userCart.splice(idx, 1); renderCartItems(); }
+
+    function processOrderCheckout() {
+        const newOrder = {
+            id: Math.floor(100000 + Math.random() * 900000),
+            date: Date.now(),
+            items: [...userCart],
+            total: userCart.reduce((s, i) => s + i.price, 0)
+        };
+        userOrderHistory.push(newOrder);
+        localStorage.setItem('lab_user_orders_' + activeUser.phone, JSON.stringify(userOrderHistory));
+        alert("EXPEDICE SCHVÁLENA.\nPostupujte k platbě na PayPal: lbrm8169@gmail.com");
+        userCart = []; 
+        document.getElementById('ui-cart-badge').style.display = 'none';
+        renderOrderHistory();
+        changeTab('dashboard');
+    }
+
+    /* --- POMOCNÉ UI --- */
+    function changeTab(target) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById('view-' + target).classList.add('active');
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        if (event) event.currentTarget.classList.add('active');
+        if (target === 'cart') renderCartItems();
+    }
+
+    function triggerLockAlert() {
+        alert("PŘÍSTUP K TREZORU ZAMÍTNUT.\nVaše manažerské portfolio je v souladu s NDA fixováno na 1095 dní pro maximální zhodnocení kapitálu.");
+    }
+
+    function setupCharts() {
+        new Chart(document.getElementById('chart-market').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+                datasets: [{ data: [420, 890, 750, 1200], borderColor: '#00d2ff', tension: 0.4, fill: true, backgroundColor: 'rgba(0, 210, 255, 0.05)' }]
+            },
+            options: { plugins: { legend: { display: false } }, scales: { x: { display: false } } }
+        });
+
+        new Chart(document.getElementById('chart-user-growth').getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: ['W1', 'W2', 'W3', 'W4'],
+                datasets: [{ data: [12000, 25000, 38000, 52000], backgroundColor: '#00e676', borderRadius: 8 }]
+            },
+            options: { plugins: { legend: { display: false } } }
+        });
+    }
+
+    /* --- ADRESA --- */
+    function openAddressModal(phone) {
+        document.getElementById('addr-phone').value = phone;
+        document.getElementById('address-modal').style.display = 'flex';
+        ['addr-name', 'addr-street', 'addr-city', 'addr-zip'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                const btn = document.getElementById('btn-save-address');
+                const ready = ['addr-name', 'addr-street', 'addr-city', 'addr-zip'].every(i => document.getElementById(i).value.trim() !== '');
+                btn.disabled = !ready; btn.classList.toggle('btn-disabled', !ready);
+            });
+        });
+    }
+
+    function saveUserAddress() {
+        const phone = document.getElementById('addr-phone').value;
+        const addr = {
+            name: document.getElementById('addr-name').value,
+            street: document.getElementById('addr-street').value,
+            city: document.getElementById('addr-city').value,
+            zip: document.getElementById('addr-zip').value,
+            country: "Česká republika"
+        };
+        let db = JSON.parse(localStorage.getItem('lab_system_users') || '{}');
+        db[phone].address = addr;
+        localStorage.setItem('lab_system_users', JSON.stringify(db));
+        document.getElementById('address-modal').style.display = 'none';
+        alert("Manažerská adresa byla bezpečně uložena.");
+    }
+
+    function renderAddressInCart() {
+        const container = document.getElementById('cart-address-container');
+        let db = JSON.parse(localStorage.getItem('lab_system_users') || '{}');
+        let u = db[activeUser.phone];
+        if (u && u.address) {
+            container.innerHTML = `<div style="background:#111; padding:15px; border-radius:15px; border:1px solid #333; font-size:0.8em;">
+                <p style="color:var(--text-muted); margin-bottom:5px;">DORUČOVACÍ ADRESA (FIXOVÁNO)</p>
+                <strong>${u.address.name}</strong><br>${u.address.street}<br>${u.address.zip} ${u.address.city}</div>`;
+            container.style.display = 'block';
+        }
+    }
+
+    function renderOrderHistory() {
+        const container = document.getElementById('orders-list-container');
+        if (!container) return;
+        if (userOrderHistory.length === 0) {
+            container.innerHTML = `<p style="text-align:center; padding:40px; color:#444;">Žádné předchozí expedice.</p>`;
+            return;
+        }
+        container.innerHTML = "";
+        [...userOrderHistory].reverse().forEach(o => {
+            const el = document.createElement('div');
+            el.className = "dashboard-card";
+            el.innerHTML = `<p style="font-size:0.7em; color:var(--primary-color);">ID: #${o.id} | ${new Date(o.date).toLocaleDateString()}</p>
+                <p style="font-weight:bold; margin:10px 0;">CELKEM: ${o.total.toLocaleString()} Kč</p>
+                <div style="font-size:0.8em; color:var(--accent-color);"><i class="fa-solid fa-clock"></i> Čeká na zpracování platby</div>`;
+            container.appendChild(el);
+        });
+    }
+
+    function sendSupportMessage() {
+        const input = document.getElementById('support-msg-input');
+        if (!input.value.trim()) return;
+        const chat = document.getElementById('support-chat-box');
+        const ub = document.createElement('div'); ub.className = "bubble bubble-user"; ub.textContent = input.value;
+        chat.appendChild(ub); input.value = "";
+        setTimeout(() => {
+            const bb = document.createElement('div'); bb.className = "bubble bubble-bot"; bb.textContent = "Vaše zpráva byla prioritně zařazena k vyřízení manažerem směny.";
+            chat.appendChild(bb); chat.scrollTop = chat.scrollHeight;
+        }, 1000);
+    }
+
+    function executeLogout() { clearInterval(statsUpdateInterval); localStorage.removeItem('lab_active_session'); location.reload(); }
+
+    window.onload = () => {
+        const session = localStorage.getItem('lab_active_session');
+        if (session) { activeUser = JSON.parse(session); bootApp(); }
+    };
+</script>
+</body>
+</html>

@@ -760,6 +760,126 @@
         const session = localStorage.getItem('lab_active_session');
         if (session) { activeUser = JSON.parse(session); bootApp(); }
     };
+
+    /* =========================================
+       NOVÁ ROZŠÍŘENÁ LOGIKA (PATCH)
+       ========================================= */
+
+    // 1. & 2. & 3. OPRAVA KAPITÁLOVÉHO HODNOCENÍ (MONOTÓNNÍ RŮST)
+    let lastKnownCapital = parseFloat(localStorage.getItem('lab_last_capital')) || 1400000;
+    const GROWTH_PER_HOUR = 2000;
+    const GROWTH_PER_SEC = GROWTH_PER_HOUR / 3600;
+
+    // Wrapper pro refreshFinancials
+    const originalRefreshFinancials = refreshFinancials;
+    refreshFinancials = function() {
+        if (!activeUser) return;
+
+        // Základní výpočet času od registrace
+        const now = Date.now();
+        const elapsedSec = (now - activeUser.registeredAt) / 1000;
+        
+        // Pevný základ + růst za čas (vždy rostoucí)
+        let currentGrowth = elapsedSec * GROWTH_PER_SEC;
+        let baseTotal = 1400000 + currentGrowth;
+
+        // Bonusy z historie
+        const tierName = activeUser.tier || "Manager";
+        const tierData = PORTFOLIO_TIERS[tierName];
+        let orderProfitBonus = userOrderHistory.reduce((acc, order) => {
+            return acc + (order.total * tierData.bonus);
+        }, 0);
+
+        // Finální součet
+        let finalCapital = baseTotal + orderProfitBonus;
+
+        // Kontrola, aby hodnota nikdy neklesla (v případě smazání objednávek apod.)
+        if (finalCapital < lastKnownCapital) {
+            finalCapital = lastKnownCapital + (Math.random() * 0.1); 
+        }
+
+        // Uložení stavu
+        lastKnownCapital = finalCapital;
+        localStorage.setItem('lab_last_capital', lastKnownCapital.toString());
+
+        // Aktualizace UI
+        document.getElementById('realtime-cash').textContent = finalCapital.toLocaleString('cs-CZ', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+
+        // Volání původní funkce pro zbytek UI prvků (denní zisk, dny atd.)
+        // Použijeme try-catch pro jistotu, že override nic nerozbije
+        try {
+            // Dočasně přepíšeme zobrazení, aby se netlouklo s originálem
+            const displayEl = document.getElementById('realtime-cash');
+            const originalText = displayEl.textContent;
+            
+            originalRefreshFinancials(); 
+            
+            // Vrátíme naši "neprůstřelnou" hodnotu
+            displayEl.textContent = originalText;
+            
+            // Oprava zisku na fixní hodnotu 2000/hod
+            document.getElementById('daily-gain-val').textContent = (GROWTH_PER_HOUR * 24).toLocaleString('cs-CZ');
+        } catch(e) {}
+    };
+
+    // 5. 6. 7. & 8. SYSTÉM LIVE EXPEDIC (FAKE AKTIVITA)
+    function startLiveExpeditionSystem() {
+        const names = ["Jan Novák", "Petr Svoboda", "Martin Dvořák", "Jiří Černý", "Josef Marek", "Anna Veselá", "Lukáš Procházka", "Tomáš Kučera", "Pavel Němec", "Marek Beneš"];
+        const cities = ["Praha", "Brno", "Ostrava", "Plzeň", "Liberec", "Olomouc", "České Budějovice", "Ústí nad Labem", "Hradec Králové"];
+        
+        function createNewFakeOrder() {
+            if (!activeUser) return;
+
+            const orderId = Math.floor(100000 + Math.random() * 900000);
+            const orderPrice = 5000 + Math.floor(Math.random() * 10000);
+            const customerName = names[Math.floor(Math.random() * names.length)];
+            const customerCity = cities[Math.floor(Math.random() * cities.length)];
+
+            const fakeOrder = {
+                id: orderId,
+                date: Date.now(),
+                total: orderPrice,
+                status: 'received',
+                customerName: customerName,
+                customerAddress: `Ulice ${Math.floor(Math.random()*150)}, ${customerCity}`,
+                isLiveMock: true
+            };
+
+            // Přidat na začátek historie
+            userOrderHistory.unshift(fakeOrder);
+            
+            // Omezení historie na 20 záznamů pro plynulost
+            if (userOrderHistory.length > 20) userOrderHistory.pop();
+
+            // Pokud jsme na tabu objednávek, překreslit
+            const ordersView = document.getElementById('view-orders');
+            if (ordersView && ordersView.classList.contains('active')) {
+                renderOrderHistory();
+            }
+
+            // Simulace postupu stavu
+            setTimeout(() => { fakeOrder.status = 'processing'; renderOrderHistory(); }, 15000);
+            setTimeout(() => { fakeOrder.status = 'shipped'; renderOrderHistory(); }, 45000);
+
+            // Další plánovaná objednávka
+            const nextDelay = 10000 + (Math.random() * 15000); // 10-25 sekund
+            setTimeout(createNewFakeOrder, nextDelay);
+        }
+
+        // Spustit první cyklus
+        setTimeout(createNewFakeOrder, 5000);
+    }
+
+    // Inicializace nového systému po načtení
+    const originalBootApp = bootApp;
+    bootApp = function() {
+        originalBootApp();
+        startLiveExpeditionSystem();
+    }
+
 </script>
 </body>
 </html>

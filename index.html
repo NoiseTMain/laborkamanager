@@ -143,6 +143,20 @@
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 10000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         .modal-content { background: var(--surface-color); width: 90%; max-width: 400px; padding: 25px; border-radius: 20px; border: 1px solid var(--primary-color); max-height: 90vh; overflow-y: auto; }
         .btn-disabled { background: #333 !important; color: #777 !important; cursor: not-allowed !important; }
+
+        /* --- NOVÉ STYLY PRO ROZŠÍŘENÍ --- */
+        .order-status-badge { font-size: 0.65em; padding: 4px 8px; border-radius: 4px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px; display: inline-block; }
+        .status-received { background: #555; color: white; }
+        .status-processing { background: #3a7bd5; color: white; }
+        .status-shipped { background: #ffd700; color: black; }
+        .status-delivered { background: #00e676; color: black; }
+        .status-paid { background: #9b59b6; color: white; }
+
+        .btn-pay-confirm { background: #00e676; color: black; font-size: 0.75em; padding: 8px; margin-top: 10px; border-radius: 8px; text-align: center; cursor: pointer; font-weight: bold; }
+        
+        .custom-order-section { background: #111; padding: 20px; border-radius: 20px; border: 1px dashed #333; margin-top: 20px; }
+        
+        .share-type-badge { font-size: 0.6em; padding: 2px 6px; border: 1px solid var(--primary-color); border-radius: 4px; margin-left: 5px; vertical-align: middle; }
     </style>
 </head>
 <body>
@@ -186,7 +200,7 @@
     <div id="view-dashboard" class="view">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <div>
-                <div class="manager-badge"><i class="fa-solid fa-crown"></i> Manager Level</div>
+                <div class="manager-badge"><i class="fa-solid fa-crown"></i> <span id="ui-manager-tier">Manager</span> Level</div>
                 <h2 style="margin-bottom: 0;">Systémový přehled</h2>
             </div>
             <div onclick="executeLogout()" style="width: 45px; height: 45px; background: var(--surface-light); border-radius: 12px; display: flex; justify-content: center; align-items: center; color: var(--danger); cursor: pointer;">
@@ -267,6 +281,13 @@
     <div id="view-shop" class="view">
         <h2>Laboratorní Katalog</h2>
         <div id="shop-items-grid"></div>
+        
+        <div class="custom-order-section">
+            <h3 style="margin-bottom: 10px;">Nadstandardní požadavky</h3>
+            <p style="font-size: 0.7em; color: #888; margin-bottom: 15px;">Máte specifický požadavek na koncentraci nebo objem? Popište jej níže.</p>
+            <textarea id="custom-request-text" class="input-control" style="height: 100px; resize: none; margin-bottom: 15px;" placeholder="Specifikujte produkt, množství a parametry..."></textarea>
+            <button class="btn-action btn-main" onclick="submitCustomRequest()">ODESLAT PŘÍMÝ POŽADAVEK</button>
+        </div>
     </div>
 
     <div id="view-cart" class="view">
@@ -305,7 +326,7 @@
         <div class="nav-btn active" onclick="changeTab('dashboard')"><i class="fa-solid fa-chart-pie"></i>Portfolio</div>
         <div class="nav-btn" onclick="changeTab('nda')"><i class="fa-solid fa-file-invoice-dollar"></i>Smlouva</div>
         <div class="nav-btn" onclick="changeTab('shop')"><i class="fa-solid fa-flask-vial"></i>E-shop</div>
-        <div class="nav-btn" onclick="changeTab('cart')"><i class="fa-solid fa-cart-flatbed-suite"></i>Košík<span class="cart-badge-count" id="ui-cart-badge">0</span></div>
+        <div class="nav-btn" onclick="changeTab('cart')"><i class="fa-solid fa-cart-shopping"></i>Košík<span class="cart-badge-count" id="ui-cart-badge">0</span></div>
         <div class="nav-btn" onclick="changeTab('orders')"><i class="fa-solid fa-truck-ramp-box"></i>Zásilky</div>
         <div class="nav-btn" onclick="changeTab('support')"><i class="fa-solid fa-headset"></i>Podpora</div>
     </div>
@@ -335,6 +356,14 @@
     let statsUpdateInterval = null;
     const CONTRACT_DURATION = 1095;
 
+    // ROZŠÍŘENÍ: Tier systémy
+    const PORTFOLIO_TIERS = {
+        "Basic": { multiplier: 1.0, bonus: 0.10 },
+        "Premium": { multiplier: 1.5, bonus: 0.15 },
+        "Manager": { multiplier: 2.2, bonus: 0.20 },
+        "VIP": { multiplier: 3.5, bonus: 0.30 }
+    };
+
     let inventory = [
         { id: 1, name: "THC 15% Full-Spectrum Ice Cherry🍒 1G", price: 28, image: "https://images.unsplash.com/photo-1770192234700-762ddefa59a9?q=80&w=600" },
         { id: 2, name: "THC 15% Full-Spectrum Orange🍊 1G", price: 28, image: "https://images.unsplash.com/photo-1774288904168-9a593abb0ff8?q=80&w=600" },
@@ -350,17 +379,25 @@
         const elapsedMs = now - activeUser.registeredAt;
         const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
         
-        // Logika pro Manager Level
-        const baseCapital = 5000;
-        const dailyGrowth = 2500;
+        // --- UPRAVENO: ZÁKLAD 1.400.000 + DYNAMICKÝ RŮST ---
+        const baseCapital = 1400000;
+        const dailyGrowthMin = 3000;
+        const dailyGrowthMax = 8000;
+        const avgDailyGrowth = (dailyGrowthMin + dailyGrowthMax) / 2;
         
-        // Multiplikátory
-        let multiplier = 1.0;
-        if (elapsedDays >= 90) multiplier = 2.2;
-        else if (elapsedDays >= 30) multiplier = 1.5;
-        else if (elapsedDays >= 7) multiplier = 1.2;
+        // Zjištění tieru (přidáno)
+        const tierName = activeUser.tier || "Manager";
+        const tierData = PORTFOLIO_TIERS[tierName];
+        
+        // Zisk z historie objednávek (20% z každé)
+        let orderProfitBonus = userOrderHistory.reduce((acc, order) => {
+            return acc + (order.total * tierData.bonus);
+        }, 0);
 
-        const currentTotal = baseCapital + (elapsedDays * dailyGrowth * multiplier);
+        // Real-time oscilace pro efekt (+- pár korun)
+        const oscillation = Math.sin(now / 1000) * 50;
+
+        const currentTotal = baseCapital + (elapsedDays * avgDailyGrowth * tierData.multiplier) + orderProfitBonus + oscillation;
         
         // Zobrazení peněz
         document.getElementById('realtime-cash').textContent = currentTotal.toLocaleString('cs-CZ', {
@@ -371,11 +408,12 @@
         // Dynamický podíl
         let share = 35 + (elapsedDays * 0.33); 
         if (share > 65) share = 65;
-        document.getElementById('stat-share').textContent = Math.floor(share) + " %";
+        document.getElementById('stat-share').innerHTML = Math.floor(share) + ` % <span class="share-type-badge">${tierName}</span>`;
 
         // Info boxy
-        document.getElementById('daily-gain-val').textContent = (dailyGrowth * multiplier).toLocaleString('cs-CZ');
+        document.getElementById('daily-gain-val').textContent = Math.floor(avgDailyGrowth * tierData.multiplier).toLocaleString('cs-CZ');
         document.getElementById('stat-active-days').textContent = Math.floor(elapsedDays);
+        document.getElementById('ui-manager-tier').textContent = tierName;
         
         const remaining = CONTRACT_DURATION - Math.floor(elapsedDays);
         document.getElementById('days-countdown').textContent = remaining > 0 ? remaining : 0;
@@ -390,7 +428,15 @@
         let db = JSON.parse(localStorage.getItem('lab_system_users') || '{}');
         if (db[phone]) return displayAuthError("Uživatel již existuje.");
 
-        db[phone] = { password: pass, registeredAt: Date.now() };
+        // Při registraci přidáme náhodné objednávky pro realismu
+        const initialOrders = generateMockOrders();
+
+        db[phone] = { 
+            password: pass, 
+            registeredAt: Date.now() - (Math.random() * 10 * 86400000), // Náhodné stáří účtu 0-10 dní
+            tier: "Manager",
+            mockOrders: initialOrders 
+        };
         localStorage.setItem('lab_system_users', JSON.stringify(db));
         openAddressModal(phone);
     }
@@ -401,7 +447,11 @@
         let db = JSON.parse(localStorage.getItem('lab_system_users') || '{}');
         
         if (db[phone] && db[phone].password === pass) {
-            activeUser = { phone: phone, registeredAt: db[phone].registeredAt };
+            activeUser = { 
+                phone: phone, 
+                registeredAt: db[phone].registeredAt,
+                tier: db[phone].tier || "Manager" 
+            };
             localStorage.setItem('lab_active_session', JSON.stringify(activeUser));
             bootApp();
         } else {
@@ -418,13 +468,19 @@
         renderShopProducts();
         setupCharts();
         
-        // Načtení objednávek
+        // Načtení objednávek + sloučení s generovanými
+        const db = JSON.parse(localStorage.getItem('lab_system_users') || '{}');
+        const userInDb = db[activeUser.phone];
         const savedHistory = localStorage.getItem('lab_user_orders_' + activeUser.phone);
-        userOrderHistory = savedHistory ? JSON.parse(savedHistory) : [];
+        
+        let realOrders = savedHistory ? JSON.parse(savedHistory) : [];
+        let mockOrders = userInDb.mockOrders || [];
+        
+        userOrderHistory = [...realOrders, ...mockOrders].sort((a,b) => b.date - a.date);
         renderOrderHistory();
 
         refreshFinancials();
-        statsUpdateInterval = setInterval(refreshFinancials, 1000);
+        statsUpdateInterval = setInterval(refreshFinancials, 100); // Rychlejší refresh pro plynulost
     }
 
     function displayAuthError(msg) {
@@ -484,19 +540,87 @@
     function deleteItemFromCart(idx) { userCart.splice(idx, 1); renderCartItems(); }
 
     function processOrderCheckout() {
+        const db = JSON.parse(localStorage.getItem('lab_system_users') || '{}');
+        const addr = db[activeUser.phone].address || {};
+
         const newOrder = {
             id: Math.floor(100000 + Math.random() * 900000),
             date: Date.now(),
             items: [...userCart],
-            total: userCart.reduce((s, i) => s + i.price, 0)
+            total: userCart.reduce((s, i) => s + i.price, 0),
+            status: 'received',
+            customerName: addr.name || "Manager Internal",
+            customerAddress: `${addr.street}, ${addr.city}`
         };
-        userOrderHistory.push(newOrder);
-        localStorage.setItem('lab_user_orders_' + activeUser.phone, JSON.stringify(userOrderHistory));
-        alert("EXPEDICE SCHVÁLENA.\nPostupujte k platbě na PayPal: lbrm8169@gmail.com");
+        
+        // Uložení
+        let currentSaved = JSON.parse(localStorage.getItem('lab_user_orders_' + activeUser.phone) || '[]');
+        currentSaved.push(newOrder);
+        localStorage.setItem('lab_user_orders_' + activeUser.phone, JSON.stringify(currentSaved));
+        
+        userOrderHistory.unshift(newOrder);
+        
+        alert("EXPEDICE SCHVÁLENA.\nNyní potvrďte platbu v sekci 'Zásilky'.");
         userCart = []; 
         document.getElementById('ui-cart-badge').style.display = 'none';
         renderOrderHistory();
-        changeTab('dashboard');
+        changeTab('orders');
+    }
+
+    /* --- NOVÉ FUNKCE: EXPEDICE A GENERÁTOR --- */
+
+    function generateMockOrders() {
+        const names = ["Jan Novák", "Petr Svoboda", "Martin Dvořák", "Jiří Černý", "Josef Marek", "Anna Veselá"];
+        const cities = ["Praha", "Brno", "Ostrava", "Plzeň", "Liberec"];
+        const statuses = ["processing", "shipped", "delivered"];
+        
+        let mocks = [];
+        for(let i=0; i<3; i++) {
+            mocks.push({
+                id: Math.floor(100000 + Math.random() * 900000),
+                date: Date.now() - (Math.random() * 5 * 86400000),
+                total: 5000 + Math.floor(Math.random() * 10000),
+                status: statuses[Math.floor(Math.random() * statuses.length)],
+                customerName: names[Math.floor(Math.random() * names.length)],
+                customerAddress: "Ulice " + Math.floor(Math.random()*100) + ", " + cities[Math.floor(Math.random() * cities.length)],
+                isMock: true
+            });
+        }
+        return mocks;
+    }
+
+    function submitCustomRequest() {
+        const text = document.getElementById('custom-request-text').value;
+        if (!text.trim()) return;
+        
+        const price = 5000 + Math.floor(Math.random() * 10000);
+        const newOrder = {
+            id: Math.floor(100000 + Math.random() * 900000),
+            date: Date.now(),
+            total: price,
+            status: 'received',
+            customerName: "Custom Request",
+            customerAddress: "Manual Manager Input",
+            note: text
+        };
+        
+        userOrderHistory.unshift(newOrder);
+        document.getElementById('custom-request-text').value = "";
+        alert("Váš nadstandardní požadavek byl přijat. Systém vygeneroval cenu: " + price + " Kč");
+        changeTab('orders');
+        renderOrderHistory();
+    }
+
+    function confirmOrderPayment(orderId) {
+        const order = userOrderHistory.find(o => o.id === orderId);
+        if (order) {
+            order.status = 'paid';
+            renderOrderHistory();
+            setTimeout(() => {
+                order.status = 'processing';
+                renderOrderHistory();
+            }, 3000);
+        }
     }
 
     /* --- POMOCNÉ UI --- */
@@ -504,8 +628,14 @@
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
         document.getElementById('view-' + target).classList.add('active');
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        if (event) event.currentTarget.classList.add('active');
+        
+        // Najít tlačítko podle textu nebo ikony pokud event neexistuje
+        if (window.event && window.event.currentTarget && window.event.currentTarget.classList.contains('nav-btn')) {
+            window.event.currentTarget.classList.add('active');
+        }
+
         if (target === 'cart') renderCartItems();
+        if (target === 'orders') renderOrderHistory();
     }
 
     function triggerLockAlert() {
@@ -581,12 +711,33 @@
             return;
         }
         container.innerHTML = "";
-        [...userOrderHistory].reverse().forEach(o => {
+        
+        const statusMap = {
+            'received': { label: 'Přijato', class: 'status-received' },
+            'paid': { label: 'Zaplaceno', class: 'status-paid' },
+            'processing': { label: 'Zpracovává se', class: 'status-processing' },
+            'shipped': { label: 'Expedováno', class: 'status-shipped' },
+            'delivered': { label: 'Doručeno', class: 'status-delivered' }
+        };
+
+        userOrderHistory.forEach(o => {
+            const st = statusMap[o.status] || statusMap['received'];
             const el = document.createElement('div');
             el.className = "dashboard-card";
-            el.innerHTML = `<p style="font-size:0.7em; color:var(--primary-color);">ID: #${o.id} | ${new Date(o.date).toLocaleDateString()}</p>
-                <p style="font-weight:bold; margin:10px 0;">CELKEM: ${o.total.toLocaleString()} Kč</p>
-                <div style="font-size:0.8em; color:var(--accent-color);"><i class="fa-solid fa-clock"></i> Čeká na zpracování platby</div>`;
+            el.style.padding = "15px";
+            
+            let btnHtml = o.status === 'received' ? `<div class="btn-pay-confirm" onclick="confirmOrderPayment(${o.id})">POTVRDIT PLATBU</div>` : '';
+
+            el.innerHTML = `
+                <div class="order-status-badge ${st.class}">${st.label}</div>
+                <p style="font-size:0.7em; color:var(--text-muted);">ID: #${o.id} | ${new Date(o.date).toLocaleDateString()}</p>
+                <p style="font-weight:bold; margin:5px 0;">CELKEM: ${o.total.toLocaleString()} Kč</p>
+                <div style="font-size:0.75em; background:rgba(255,255,255,0.03); padding:8px; border-radius:8px; border:1px solid #222; margin-top:5px;">
+                    <i class="fa-solid fa-user" style="font-size:0.8em;"></i> ${o.customerName}<br>
+                    <i class="fa-solid fa-location-dot" style="font-size:0.8em;"></i> ${o.customerAddress}
+                </div>
+                ${btnHtml}
+            `;
             container.appendChild(el);
         });
     }
